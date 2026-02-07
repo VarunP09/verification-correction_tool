@@ -308,6 +308,27 @@ function ToolMain() {
   // Hover tooltip for quick label preview (follows cursor)
   const [hoverTooltip, setHoverTooltip] = useState({ visible: false, x: 0, y: 0, label: "" });
 
+  // Phase 3: If user DENIES an LLM label, collect a corrected label
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [correctionChoice, setCorrectionChoice] = useState("");
+  const [correctionError, setCorrectionError] = useState("");
+  const [correctionContext, setCorrectionContext] = useState(null);
+  // userCorrections[paragraphIndex] = { correctedSubcategory: "..." }
+  const [userCorrections, setUserCorrections] = useState({});
+
+  const SUBCATEGORY_OPTIONS = [
+    "exaggeration",
+    "slogans",
+    "bandwagon",
+    "casual oversimplification",
+    "doubt",
+    "name-calling",
+    "demonization",
+    "scapegoating",
+    "no polarizing language",
+  ];
+
+
   // --- Post-verification survey (shown after all paragraphs are accepted/denied) ---
   const [showSurvey, setShowSurvey] = useState(false);
   const [surveyQ1, setSurveyQ1] = useState(null); // confidence in polarizing language (1-5)
@@ -366,12 +387,65 @@ function ToolMain() {
     setSurveyQ3("");
     setSurveyError("");
 
+    // Reset phase-3 correction state for the new article
+    setUserCorrections({});
+    setShowCorrectionModal(false);
+    setCorrectionChoice("");
+    setCorrectionContext(null);
+
     const llmRef = ref(database, `LLMAnnotations/${selectedIdx}`);
     get(llmRef).then((snap) => {
       if (snap.exists()) setLlmAnnotations(snap.val());
       else setLlmAnnotations({});
     });
   }, [selectedIdx]);
+
+  // Helpers
+  const toTitleCase = (s) =>
+    String(s || "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+
+  // Phase 3: when user denies, collect a corrected subcategory
+  const openCorrectionFlow = () => {
+    if (!llmForCurrent || readyToSubmit) return;
+
+    setCorrectionContext({
+      paragraphIndex: currentParagraphIndex,
+      span: llmForCurrent.span || "",
+      // Keep both keys for safety (older UI used llmLabel)
+      llmSubcategory: llmForCurrent.subcategory || "Unknown",
+      llmLabel: llmForCurrent.subcategory || "Unknown",
+    });
+
+    setCorrectionChoice("");
+    setCorrectionError("");
+    setShowCorrectionModal(true);
+  };
+
+  const confirmCorrectionAndDeny = async () => {
+    if (!correctionContext) return;
+    if (!correctionChoice) {
+      setCorrectionError("Please choose a label before continuing.");
+      return;
+    }
+
+    // Store correction locally for final submission alongside survey
+    setUserCorrections((prev) => ({
+      ...prev,
+      [correctionContext.paragraphIndex]: {
+        correctedSubcategory: correctionChoice,
+      },
+    }));
+
+    setShowCorrectionModal(false);
+    setCorrectionError("");
+
+    // Proceed with the existing deny vote behavior
+    await submitVote("deny");
+  };
 
   /* -------- Voting logic -------- */
   async function submitVote(type) {
@@ -492,6 +566,14 @@ function ToolMain() {
             bias: surveyQ2,
             confidence: surveyQ1,
             openFeedback: (surveyQ3 || "").trim(),
+            // Phase 3: if a user denied an LLM label and chose an alternative,
+            // store it keyed by paragraph index.
+            ...Object.fromEntries(
+              Object.entries(userCorrections || {}).map(([pIdx, obj]) => [
+                String(pIdx),
+                { correctedSubcategory: obj?.correctedSubcategory },
+              ])
+            ),
           },
         },
         timestamp: ts,
@@ -976,7 +1058,7 @@ function ToolMain() {
 
               <div className="flex justify-center space-x-4">
                 <Button
-                  onClick={() => submitVote("deny")}
+                  onClick={openCorrectionFlow}
                   className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
                 >
                   Deny
@@ -1058,6 +1140,77 @@ function ToolMain() {
         >
           <div className="font-semibold">LLM label</div>
           <div className="capitalize">{hoverTooltip.label}</div>
+        </div>
+      )}
+
+      {/* Phase 3 correction modal shown when user denies an LLM label */}
+      {showCorrectionModal && correctionContext && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-lg w-full max-w-lg p-6">
+            <h2 className="text-xl font-bold text-center mb-4">Correction</h2>
+
+            <div className="border rounded-lg p-3 mb-3 bg-gray-50">
+              <div className="text-xs text-gray-500 font-semibold mb-1">Highlighted span</div>
+              <div className="text-sm break-words">“{correctionContext.span}”</div>
+            </div>
+
+            <div className="text-sm text-gray-700 mb-3">
+              The LLM labeled this as{" "}
+              <span className="font-semibold">{toTitleCase(correctionContext.llmSubcategory)}</span>.
+              If you disagree, choose the label you would apply instead.
+            </div>
+
+            <label className="block text-sm font-semibold mb-1">Your label</label>
+            <select
+              className="w-full border rounded-lg p-2 mb-4"
+              value={correctionChoice}
+              onChange={(e) => setCorrectionChoice(e.target.value)}
+            >
+              <option value="" disabled>
+                Select a subcategory...
+              </option>
+              {SUBCATEGORY_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+
+            {correctionError && (
+              <div className="text-sm text-red-600 font-semibold mb-3">
+                {correctionError}
+              </div>
+            )}
+
+
+            
+{correctionChoice && getSubcategoryDefinition(correctionChoice) && (
+  <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 mb-4">
+    <p className="text-xs text-gray-500 mb-1 font-semibold capitalize">
+      Definition of {correctionChoice}
+    </p>
+    <p className="text-sm text-gray-800 leading-relaxed">
+      {getSubcategoryDefinition(correctionChoice)}
+    </p>
+  </div>
+)}
+
+<div className="flex justify-end gap-2">
+              <button
+                className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+                onClick={() => setShowCorrectionModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-60"
+                onClick={confirmCorrectionAndDeny}
+                disabled={!correctionChoice}
+              >
+                Confirm & Continue
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
