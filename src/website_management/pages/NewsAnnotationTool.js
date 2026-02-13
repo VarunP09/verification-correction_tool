@@ -1116,6 +1116,10 @@ function ToolMain() {
           </li>
           <div className="h-3" />
           <li>
+            If you deny, you will be prompted to choose the label you think best fits the highlighted text.
+          </li>
+          <div className="h-3" />
+          <li>
             After choosing, you will automatically move to the next paragraph.
           </li>
         </ul>
