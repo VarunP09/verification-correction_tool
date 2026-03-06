@@ -334,6 +334,7 @@ function ToolMain() {
   const [surveyQ1, setSurveyQ1] = useState(null); // confidence in polarizing language (1-5)
   const [surveyQ2, setSurveyQ2] = useState(null); // perceived bias (1-5)
   const [surveyQ3, setSurveyQ3] = useState("");   // free response (min 100 chars)
+  const [surveyQ4, setSurveyQ4] = useState("");
   const [surveyFinished, setSurveyFinished] = useState(false);
   const [surveyError, setSurveyError] = useState("");
 
@@ -385,6 +386,7 @@ function ToolMain() {
     setSurveyQ1(null);
     setSurveyQ2(null);
     setSurveyQ3("");
+    setSurveyQ4("");
     setSurveyError("");
 
     // Reset phase-3 correction state for the new article
@@ -543,9 +545,9 @@ function ToolMain() {
     `MTURK-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
   const handleFinalSubmit = async () => {
-    const ok = !!surveyQ1 && !!surveyQ2 && (surveyQ3 || "").trim().length >= 100;
+    const ok = !!surveyQ1 && !!surveyQ2 && (surveyQ3 || "").trim().length >= 100 && (surveyQ4 || "").trim().length >= 100;
     if (!ok) {
-      setSurveyError("Please answer all questions. Question 3 must be at least 100 characters.");
+      setSurveyError("Please answer all questions. Questions 3 & 4 must be at least 100 characters.");
       return;
     }
 
@@ -565,7 +567,8 @@ function ToolMain() {
           [articleKey]: {
             bias: surveyQ2,
             confidence: surveyQ1,
-            openFeedback: (surveyQ3 || "").trim(),
+            openFeedback1: (surveyQ3 || "").trim(),
+            openFeedback2: (surveyQ4 || "").trim(),
             // Phase 3: if a user denied an LLM label and chose an alternative,
             // store it keyed by paragraph index.
             ...Object.fromEntries(
@@ -928,7 +931,7 @@ function ToolMain() {
                   <div className="space-y-6">
                     <div>
                       <p className="font-semibold mb-2 text-gray-800">
-                        1. How confident are you that there is polarizing language (either persuasive propaganda or inflammatory language) in this article?
+                        1. How confident are you in your evaluations of the LLM’s annotations in this article?
                       </p>
                       <div className="space-y-2">
                         {[1, 2, 3, 4, 5].map((v) => (
@@ -943,11 +946,11 @@ function ToolMain() {
                             />
                             <span>
                               {v} — {
-                                v === 1 ? "Not at all confident that there is polarizing language" :
-                                v === 2 ? "Slightly confident that there is polarizing language" :
-                                v === 3 ? "Moderately confident that there is polarizing language" :
-                                v === 4 ? "Very confident that there is polarizing language" :
-                                          "Extremely confident that there is polarizing language"
+                                v === 1 ? "Not at all confident" :
+                                v === 2 ? "Slightly confident" :
+                                v === 3 ? "Moderately confident" :
+                                v === 4 ? "Very confident" :
+                                          "Extremely confident"
                               }
                             </span>
                           </label>
@@ -957,7 +960,7 @@ function ToolMain() {
 
                     <div>
                       <p className="font-semibold mb-2 text-gray-800">
-                        2. To what extent does this article seem biased, one-sided, or misleading in how it presents information?
+                        2. Overall, how accurate did the LLM’s annotations seem in identifying polarizing language in the article?
                       </p>
                       <div className="space-y-2">
                         {[1, 2, 3, 4, 5].map((v) => (
@@ -972,11 +975,11 @@ function ToolMain() {
                             />
                             <span>
                               {v} — {
-                                v === 1 ? "Not at all biased" :
-                                v === 2 ? "Slightly biased" :
-                                v === 3 ? "Moderately biased" :
-                                v === 4 ? "Very biased" :
-                                          "Extremely biased"
+                                v === 1 ? "Not at all accurate" :
+                                v === 2 ? "Slightly accurate" :
+                                v === 3 ? "Moderately accurate" :
+                                v === 4 ? "Very accurate" :
+                                          "Extremely accurate"
                               }
                             </span>
                           </label>
@@ -986,14 +989,13 @@ function ToolMain() {
 
                     <div>
                       <p className="font-semibold mb-2 text-gray-800">
-                        3. Why did you answer this way? What specific phrases, tone choices, or examples made it stand out to you?
-                        You might reference particular sentences, framing choices, or emotional wording that influenced your decision.
+                        3. Please briefly explain why you agreed or disagreed with the LLM’s annotations. You may reference specific phrases, tone choices, or examples from the article that influenced your decision.
                       </p>
                       <textarea
                         className="w-full min-h-[140px] border border-gray-300 rounded p-3 text-sm text-gray-800"
                         value={surveyQ3}
                         onChange={(e) => { setSurveyQ3(e.target.value); setSurveyError(""); }}
-                        placeholder='For example: "I answered this way because the article repeatedly framed one side as unreasonable without providing evidence."'
+                        placeholder='For example: "I agreed/disagreed with the LLM annotations because..."'
                         disabled={surveyFinished}
                       />
                       <p className="text-xs text-gray-500 mt-1">
@@ -1001,11 +1003,27 @@ function ToolMain() {
                       </p>
                     </div>
 
-                    {surveyError && (
+                    <div>
+                      <p className="font-semibold mb-2 text-gray-800">
+                        4. Aside from the LLM’s annotations, how did you personally feel about the article overall?
+                      </p>
+                      <textarea
+                        className="w-full min-h-[140px] border border-gray-300 rounded p-3 text-sm text-gray-800"
+                        value={surveyQ4}
+                        onChange={(e) => { setSurveyQ4(e.target.value); setSurveyError(""); }}
+                        placeholder='For example: "I felt..."'
+                        disabled={surveyFinished}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Character count: {surveyQ4.length} (minimum 100 characters)
+                      </p>
+                    </div>
+
+                    {/* {surveyError && (
                       <div className="text-sm text-red-600 font-semibold">
                         {surveyError}
                       </div>
-                    )}
+                    )} */}
                   </div>
 
                   <div className="mt-6 flex flex-col items-start space-y-3">
