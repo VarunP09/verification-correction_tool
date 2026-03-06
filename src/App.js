@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import NewsAnnotationTool from "./website_management/pages/NewsAnnotationTool.js";
 
 // 15-minute global timer (shown on intro video screen + main tool)
-const TASK_TIMER_SECONDS = 15 * 60;
+const TASK_TIMER_SECONDS = 10 * 60;
 
 function formatTimeMMSS(totalSeconds) {
   const s = Math.max(0, Number(totalSeconds) || 0);
