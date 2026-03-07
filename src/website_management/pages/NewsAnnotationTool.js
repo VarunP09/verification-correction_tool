@@ -555,7 +555,7 @@ function ToolMain() {
       const code = generateCode();
       setCompletionCode(code);
 
-      const ts = Date.now().toISOString();
+      const ts = new Date().toISOString();
       const articleKey = selectedIdx !== null ? String(selectedIdx) : "unknown";
 
       const submissionPayload = {
